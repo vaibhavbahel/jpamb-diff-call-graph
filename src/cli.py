@@ -10,6 +10,7 @@ import click
 
 import jpamb
 import jpamb.interpret
+import jpamb.revision
 import jvm
 import sexpr
 from jpamb.report import write_report
@@ -510,6 +511,53 @@ def inspect(ctx, method, format):
             case "json":
                 res = json.dumps(res)
         sys.stdout.write(f"{i:03d} | {res}\n")
+
+
+@cli.command()
+@click.argument("before", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument("after", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--before-revision", type=click.IntRange(min=0), help="Select nameRevN methods."
+)
+@click.option(
+    "--after-revision", type=click.IntRange(min=0), help="Select nameRevN methods."
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.File("w", encoding="utf-8"),
+    default="-",
+    help="Write JSON to this file (default: stdout).",
+)
+def diff(before, after, before_revision, after_revision, output):
+    """Compare methods in two decompiled class folders; print JSON."""
+    try:
+        old = jpamb.revision.load_methods(before, before_revision)
+        new = jpamb.revision.load_methods(after, after_revision)
+    except (OSError, ValueError) as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(json.dumps(jpamb.revision.diff_methods(old, new), indent=2), file=output)
+
+
+@cli.command("call-graph")
+@click.argument("folder", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--revision", type=click.IntRange(min=0), help="Select nameRevN methods.")
+@click.option(
+    "-o",
+    "--output",
+    type=click.File("w", encoding="utf-8"),
+    default="-",
+    help="Write JSON to this file (default: stdout).",
+)
+def call_graph(folder, revision, output):
+    """Print the static caller-to-callee graph as JSON."""
+    try:
+        methods = jpamb.revision.load_methods(folder, revision)
+    except (OSError, ValueError) as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(
+        json.dumps(jpamb.revision.static_call_graph(methods), indent=2), file=output
+    )
 
 
 if __name__ == "__main__":
